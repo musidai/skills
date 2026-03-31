@@ -1,0 +1,294 @@
+---
+name: musidai
+description: Use when the user wants to generate a music video, video scene, character image, or music track via the Musid AI platform API. Triggers on /musidai, /musidai full, /musidai image, /musidai video, /musidai music commands, or any request to start an AI content generation pipeline on Musid.
+---
+
+# Musid AI
+
+Reference guide for generating AI content on the Musid platform. Two modes: full pipeline (end-to-end music video) or single asset (image / video / music).
+
+## Mode A: Full Pipeline (`/musidai` or `/musidai full`)
+
+### Step 1: Check API key
+
+Verify `MUSID_API_KEY` is in the environment. If missing, tell the user:
+
+> Your Musid AI API key is not configured. Please visit https://musid.ai/settings/apikeys to generate an API key, then run `/update-config` and set `MUSID_API_KEY=<your key>`.
+
+Stop here if no API key.
+
+### Step 2: Collect parameters
+
+**Required:**
+- `prompt` — creative direction / theme / visual style
+
+**Common optional (ask if not provided):**
+- `audioUrl` — direct URL to mp3/wav (skip if none)
+- `character` — main character description (AI auto-generates if omitted)
+- `aspectRatio` — default `16:9` (standard) or `2:3` (AI-enhanced mode) | other options: `9:16`, `3:2`, `1:1`
+- `visibility` — `public` (default) or `private`
+
+**Audio timing (when audioUrl is provided):**
+- `audioDuration` — clip duration in seconds
+- `audioStartTime` — start offset in seconds
+- `audioEndTime` — end offset in seconds
+
+**Pipeline behavior:**
+- `autoMode` — `false` (default); set `true` to skip manual storyboard review
+- `multiShots` — hardcoded `true` when audio is present
+- `selectedMusic` — pre-selected music track: `{ id?, url, name }`
+
+**Advanced (only if explicitly asked):**
+- `resolution` — `720p` (default) or `1080p`
+- `characterImageUrls` — array of reference image URLs (max 14)
+
+If all params are provided upfront, proceed without asking.
+
+### Step 3: Call the pipeline API
+
+```typescript
+const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://musid.ai'}/api/agent/pipeline/start`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.MUSID_API_KEY}`,
+  },
+  body: JSON.stringify({
+    prompt,
+    audioUrl,           // optional
+    audioDuration,      // optional, seconds
+    audioStartTime,     // optional, seconds
+    audioEndTime,       // optional, seconds
+    character,          // optional
+    aspectRatio,        // default '16:9'
+    resolution,         // optional, '720p' or '1080p'
+    visibility,         // optional, 'public' or 'private'
+    autoMode,           // optional, default false
+    multiShots,         // optional, default true when audio present
+    selectedMusic,      // optional, { id?, url, name }
+    characterImageUrls, // optional array
+  }),
+});
+const data = await response.json();
+```
+
+Or via curl:
+```bash
+curl -X POST "${APP_URL}/api/agent/pipeline/start" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${MUSID_API_KEY}" \
+  -d '{"prompt": "...", "audioUrl": "...", "aspectRatio": "16:9"}'
+```
+
+### Step 4: Show result
+
+On success (`data.data.projectId` exists):
+```
+Music video generation started!
+
+Project: {data.data.projectUrl}
+Project ID: {data.data.projectId}
+
+The pipeline is running in the background:
+  - Character design & audio analysis (parallel)
+  - Scene planning
+  - Storyboard image generation
+  - Scene video generation
+
+When complete, visit the project URL to preview scenes and click Merge to assemble the final video.
+```
+
+On error:
+```
+Failed to start pipeline: {data.message}
+```
+
+---
+
+## Mode B: Single Asset (`/musidai image` | `/musidai video` | `/musidai music`)
+
+Base URL: `process.env.MUSID_APP_URL || 'https://musid.ai'`
+
+All single-asset requests go to `POST /api/ai/generate`.
+
+---
+
+### Image
+
+**Scenes:** `text-to-image` (default) or `image-to-image`
+
+**Parameters:**
+| Field | Default | Notes |
+|-------|---------|-------|
+| `mediaType` | `"IMAGE"` | fixed |
+| `scene` | `"text-to-image"` | or `"image-to-image"` |
+| `prompt` | required | |
+| `visibility` | `"public"` | or `"private"` |
+| `options.aspect_ratio` | `"auto"` | e.g. `"16:9"`, `"9:16"`, `"1:1"` |
+| `options.resolution` | `"1K"` | `"1K"` (4 cr) / `"2K"` (8 cr) / `"4K"` (12 cr) |
+| `options.output_format` | `"jpg"` | or `"png"` |
+| `options.google_search` | `false` | AI web grounding toggle |
+| `options.image_input` | — | string[] of reference image URLs; `image-to-image` only |
+
+```bash
+# Text to image
+curl -X POST "${APP_URL}/api/ai/generate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${MUSID_API_KEY}" \
+  -d '{
+    "mediaType": "IMAGE",
+    "scene": "text-to-image",
+    "prompt": "...",
+    "visibility": "public",
+    "options": {
+      "aspect_ratio": "16:9",
+      "resolution": "1K",
+      "output_format": "jpg"
+    }
+  }'
+
+# Image to image
+curl -X POST "${APP_URL}/api/ai/generate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${MUSID_API_KEY}" \
+  -d '{
+    "mediaType": "IMAGE",
+    "scene": "image-to-image",
+    "prompt": "...",
+    "options": {
+      "image_input": ["https://example.com/ref.jpg"]
+    }
+  }'
+```
+
+---
+
+### Video
+
+**Scenes:** `text-to-video` (default) or `image-to-video`
+
+**Universal parameters:**
+| Field | Default | Notes |
+|-------|---------|-------|
+| `mediaType` | `"VIDEO"` | fixed |
+| `scene` | `"text-to-video"` | or `"image-to-video"` |
+| `prompt` | required | |
+| `visibility` | `"public"` | or `"private"` |
+| `options.aspect_ratio` | `"9:16"` | `"16:9"` or `"9:16"`; AI mode adds `"2:3"`, `"3:2"`, `"1:1"` |
+| `options.duration` | `5` | seconds; standard: `5/10/15`; AI mode: `6/10` |
+
+**Standard mode only:**
+| Field | Default | Notes |
+|-------|---------|-------|
+| `options.resolution` | `"480p"` | `"480p"` / `"720p"` / `"1080p"`; image-to-video only |
+| `options.seed` | — | optional integer |
+| `options.negative_prompt` | `""` | negative prompt |
+| `options.enable_prompt_expansion` | `true` | AI prompt enhancement |
+| `options.multi_shots` | — | boolean; requires `enable_prompt_expansion: true` |
+| `options.audio` | — | URL to audio file |
+| `options.image` | — | reference image URL; image-to-video only |
+
+**AI mode only:**
+| Field | Default | Notes |
+|-------|---------|-------|
+| `options.mode` | `"normal"` | `"fun"` / `"normal"` / `"spicy"` |
+
+```bash
+# Text to video
+curl -X POST "${APP_URL}/api/ai/generate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${MUSID_API_KEY}" \
+  -d '{
+    "mediaType": "VIDEO",
+    "scene": "text-to-video",
+    "prompt": "...",
+    "options": {
+      "aspect_ratio": "9:16",
+      "duration": 5,
+      "enable_prompt_expansion": true
+    }
+  }'
+
+# Image to video
+curl -X POST "${APP_URL}/api/ai/generate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${MUSID_API_KEY}" \
+  -d '{
+    "mediaType": "VIDEO",
+    "scene": "image-to-video",
+    "prompt": "...",
+    "options": {
+      "image": "https://example.com/ref.jpg",
+      "duration": 5,
+      "resolution": "720p"
+    }
+  }'
+```
+
+---
+
+### Music
+
+**Parameters:**
+| Field | Default | Notes |
+|-------|---------|-------|
+| `mediaType` | `"music"` | fixed |
+| `prompt` | required | song description / direction |
+| `visibility` | `"public"` | or `"private"` |
+| `options.style` | `""` | genre / style tags |
+| `options.title` | `""` | song title |
+| `options.customMode` | `false` | enable custom lyrics mode |
+| `options.instrumental` | `false` | no vocals |
+| `options.vocalGender` | `""` | `"m"` or `"f"` |
+| `options.negativeTags` | `""` | style tags to avoid |
+| `options.lyrics` | `""` | custom lyrics; only when `customMode: true` and no audio uploaded |
+| `options.scene` | — | `"add-vocals"` or `"add-instrumental"`; only when audio uploaded |
+| `options.uploadUrl` | — | uploaded audio file URL; only when audio uploaded |
+
+```bash
+# Generate music
+curl -X POST "${APP_URL}/api/ai/generate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${MUSID_API_KEY}" \
+  -d '{
+    "mediaType": "music",
+    "prompt": "upbeat pop song about summer",
+    "options": {
+      "style": "pop, upbeat",
+      "title": "Summer Vibes"
+    }
+  }'
+
+# Add vocals to uploaded audio
+curl -X POST "${APP_URL}/api/ai/generate" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${MUSID_API_KEY}" \
+  -d '{
+    "mediaType": "music",
+    "prompt": "soulful R&B vocals",
+    "options": {
+      "scene": "add-vocals",
+      "uploadUrl": "https://example.com/track.mp3"
+    }
+  }'
+```
+
+---
+
+### Single-asset success response
+```
+{type} generation started! Task ID: {taskId}
+
+View result at: {APP_URL}/my-creations
+
+The webhook will update task status automatically when complete.
+```
+
+---
+
+## Notes
+
+- Pipeline model selection and scene planning are handled entirely server-side — not user-configurable.
+- Video merge (final assembly) is done **on the web** — click Merge on the project page.
+- Pipeline projects show a CHARACTER step in the UI with the generated reference image.
+- Credit costs: Image 1K=4cr, 2K=8cr, 4K=12cr · Music=4cr · Standard video 5cr/sec · Audio transcription=1cr · Vocal remover=4cr
