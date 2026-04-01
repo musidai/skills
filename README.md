@@ -1,5 +1,7 @@
-# Quick Start
-Install the Musid AI skill for your AI coding agent and start generating music videos, images, and music with natural language.
+---
+title: Quick Start
+description: Install the Musid AI skill for your AI coding agent and start generating music videos, images, and music with natural language.
+---
 
 Generate music videos, images, and music tracks directly from your AI coding agent — no code required.
 
