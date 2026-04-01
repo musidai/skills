@@ -34,9 +34,8 @@ Stop here if no API key.
 - `audioEndTime` — end offset in seconds
 
 **Pipeline behavior:**
-- `autoMode` — `false` (default); set `true` to skip manual storyboard review
+- `autoMode` — `true` (default); set `false` to pause for manual storyboard review
 - `multiShots` — hardcoded `true` when audio is present
-- `selectedMusic` — pre-selected music track: `{ id?, url, name }`
 
 **Advanced (only if explicitly asked):**
 - `resolution` — `720p` (default) or `1080p`
@@ -63,9 +62,8 @@ const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://musi
     aspectRatio,        // default '16:9'
     resolution,         // optional, '720p' or '1080p'
     visibility,         // optional, 'public' or 'private'
-    autoMode,           // optional, default false
+    autoMode,           // optional, default true
     multiShots,         // optional, default true when audio present
-    selectedMusic,      // optional, { id?, url, name }
     characterImageUrls, // optional array
   }),
 });
@@ -107,6 +105,8 @@ Failed to start pipeline: {data.message}
 
 ## Mode B: Single Asset (`/musidai image` | `/musidai video` | `/musidai music`)
 
+> **Auth:** Accepts `Authorization: Bearer <MUSID_API_KEY>` (same key as the pipeline) or a web session cookie. `provider` and `model` are optional; the server selects defaults automatically.
+
 Base URL: `process.env.MUSID_APP_URL || 'https://musid.ai'`
 
 All single-asset requests go to `POST /api/ai/generate`.
@@ -120,7 +120,7 @@ All single-asset requests go to `POST /api/ai/generate`.
 **Parameters:**
 | Field | Default | Notes |
 |-------|---------|-------|
-| `mediaType` | `"IMAGE"` | fixed |
+| `mediaType` | `"image"` | fixed |
 | `scene` | `"text-to-image"` | or `"image-to-image"` |
 | `prompt` | required | |
 | `visibility` | `"public"` | or `"private"` |
@@ -136,7 +136,7 @@ curl -X POST "${APP_URL}/api/ai/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${MUSID_API_KEY}" \
   -d '{
-    "mediaType": "IMAGE",
+    "mediaType": "image",
     "scene": "text-to-image",
     "prompt": "...",
     "visibility": "public",
@@ -152,7 +152,7 @@ curl -X POST "${APP_URL}/api/ai/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${MUSID_API_KEY}" \
   -d '{
-    "mediaType": "IMAGE",
+    "mediaType": "image",
     "scene": "image-to-image",
     "prompt": "...",
     "options": {
@@ -167,10 +167,20 @@ curl -X POST "${APP_URL}/api/ai/generate" \
 
 **Scenes:** `text-to-video` (default) or `image-to-video`
 
+**Model selection — always ask the user whether they need lip-sync:**
+
+| Need | Recommended model | Resolution |
+|------|------------------|------------|
+| No lip-sync (default) | `grok-imagine` | any — lowest cost |
+| Lip-sync, 480p | `musid-lite` | 480p only |
+| Lip-sync, 720p / 1080p | `musid-pro` | 720p or 1080p |
+
+Pass the model name in the `model` field; the server translates it to the underlying model automatically.
+
 **Universal parameters:**
 | Field | Default | Notes |
 |-------|---------|-------|
-| `mediaType` | `"VIDEO"` | fixed |
+| `mediaType` | `"video"` | fixed |
 | `scene` | `"text-to-video"` | or `"image-to-video"` |
 | `prompt` | required | |
 | `visibility` | `"public"` | or `"private"` |
@@ -199,7 +209,7 @@ curl -X POST "${APP_URL}/api/ai/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${MUSID_API_KEY}" \
   -d '{
-    "mediaType": "VIDEO",
+    "mediaType": "video",
     "scene": "text-to-video",
     "prompt": "...",
     "options": {
@@ -214,7 +224,7 @@ curl -X POST "${APP_URL}/api/ai/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${MUSID_API_KEY}" \
   -d '{
-    "mediaType": "VIDEO",
+    "mediaType": "video",
     "scene": "image-to-video",
     "prompt": "...",
     "options": {
