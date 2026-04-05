@@ -118,12 +118,22 @@ Then add `MUSID_API_KEY=your-key-here` to your VS Code environment or `.env`.
 
 Just describe what you want in natural language. Your agent handles the API calls.
 
+The full music video pipeline now defaults to **Wan 2.7**. If you provide audio, the agent will first wait for audio analysis to finish, then plan scenes, generate storyboard frames, and render scene videos.
+
 ```
 Generate a music video: neon cyberpunk city at night, vertical format
 ```
 
 ```
 Create a music video with my track: https://example.com/song.mp3
+```
+
+```
+Create a lip-synced music video in Wan 2.7: moody rain-soaked rooftop performance, 16:9, cinematic lighting
+```
+
+```
+Create a lower-cost non-lipsync video with Grok Imagine: surreal desert dance sequence, vertical format
 ```
 
 ```
@@ -140,9 +150,16 @@ Generate a music track: upbeat pop song about summer, no vocals
 
 | Command | Output |
 |---------|--------|
-| Music video (full) | Character design → scene planning → storyboard → video clips |
+| Music video (full) | Audio analysis + character design → scene planning → storyboard images → Wan 2.7 or Grok scene videos |
 | Image | Single AI-generated image |
-| Video clip | Single video scene |
+| Video clip | Single video scene with Wan 2.7 or Grok Imagine |
 | Music track | Original AI-generated song |
+
+## Current model behavior
+
+- **Wan 2.7** is the default full-pipeline model and the recommended choice when you need lip-sync.
+- **Wan 2.7** supports `2-15s` scene durations and can use multi-shot prompts with time markers like `[0-3s]`, `[3-8s]`.
+- **Grok Imagine** is the lower-cost alternative for non-lip-sync scenes.
+- Final merge still happens on the project page after all scene clips finish rendering.
 
 View all results at [musid.ai/my-creations](https://musid.ai/my-creations).
