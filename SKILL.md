@@ -25,7 +25,7 @@ Stop here if no API key.
 **Common optional (ask if not provided):**
 - `audioUrl` — direct URL to mp3/wav (skip if none)
 - `character` — main character description (AI auto-generates if omitted)
-- `aspectRatio` — default `16:9` (standard) or `2:3` (AI-enhanced mode) | other options: `9:16`, `3:2`, `1:1`
+- `aspectRatio` — default `16:9`; commonly used alternatives: `9:16`, `1:1`, `3:2`, `2:3`
 - `visibility` — `public` (default) or `private`
 
 **Audio timing (when audioUrl is provided):**
@@ -35,7 +35,8 @@ Stop here if no API key.
 
 **Pipeline behavior:**
 - `autoMode` — `true` (default); set `false` to pause for manual storyboard review
-- `multiShots` — hardcoded `true` when audio is present
+- `multiShots` — optional boolean; request default is `true`
+- `agentModel` — default `wan-2.7`; optional alternative `grok-imagine`
 
 **Advanced (only if explicitly asked):**
 - `resolution` — `720p` (default) or `1080p`
@@ -58,6 +59,7 @@ const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://musi
     audioDuration,      // optional, seconds
     audioStartTime,     // optional, seconds
     audioEndTime,       // optional, seconds
+    agentModel,         // optional, default 'wan-2.7'
     character,          // optional
     aspectRatio,        // default '16:9'
     resolution,         // optional, '720p' or '1080p'
@@ -89,9 +91,10 @@ Project ID: {data.data.projectId}
 
 The pipeline is running in the background:
   - Character design & audio analysis (parallel)
-  - Scene planning
+  - Wait for "Audio analysis complete" when audio is present
+  - Scene planning via the planScenes tool
   - Storyboard image generation
-  - Scene video generation
+  - Scene video generation with the selected agent model
 
 When complete, visit the project URL to preview scenes and click Merge to assemble the final video.
 ```
@@ -171,11 +174,11 @@ curl -X POST "${APP_URL}/api/ai/generate" \
 
 | Need | Recommended model | Resolution |
 |------|------------------|------------|
-| No lip-sync (default) | `grok-imagine` | any — lowest cost |
-| Lip-sync, 480p | `musid-lite` | 480p only |
-| Lip-sync, 720p / 1080p | `musid-pro` | 720p or 1080p |
+| Lip-sync or full pipeline default | `wan-2.7` | `480p` / `720p` / `1080p` |
+| No lip-sync / lowest cost | `grok-imagine` | typically `720p` |
 
-Pass the model name in the `model` field; the server translates it to the underlying model automatically.
+Pass the model name in the `model` field. The API accepts `wan-2.7` and `grok-imagine` directly. Legacy aliases `musid-lite` and `musid-pro` still resolve to Wan 2.7, but they should not be recommended in new docs.
+If `provider` and `model` are both omitted, the server picks the default provider first, then applies that provider's default model. This is config-dependent, so do not assume a specific video model unless you set `model` explicitly.
 
 **Universal parameters:**
 | Field | Default | Notes |
@@ -184,53 +187,63 @@ Pass the model name in the `model` field; the server translates it to the underl
 | `scene` | `"text-to-video"` | or `"image-to-video"` |
 | `prompt` | required | |
 | `visibility` | `"public"` | or `"private"` |
-| `options.aspect_ratio` | `"9:16"` | `"16:9"` or `"9:16"`; AI mode adds `"2:3"`, `"3:2"`, `"1:1"` |
-| `options.duration` | `5` | seconds; standard: `5/10/15`; AI mode: `6/10` |
+| `model` | provider default | recommend setting to `"wan-2.7"` or `"grok-imagine"` explicitly |
+| `options.aspect_ratio` | `"9:16"` | Wan 2.7: `"16:9"` / `"9:16"` / `"1:1"` / `"4:3"` / `"3:4"` for T2V; Grok commonly uses `"2:3"` / `"3:2"` / `"1:1"` / `"9:16"` / `"16:9"` |
+| `options.duration` | model-dependent | Wan 2.7 commonly defaults to `5`; Wan 2.7 supports `2-15` seconds (integer); Grok Imagine scenes are typically `6-30` seconds |
 
-**Standard mode only:**
+**Wan 2.7 fields:**
 | Field | Default | Notes |
 |-------|---------|-------|
-| `options.resolution` | `"480p"` | `"480p"` / `"720p"` / `"1080p"`; image-to-video only |
+| `options.resolution` | `"480p"` | `"480p"` / `"720p"` / `"1080p"` |
 | `options.seed` | — | optional integer |
 | `options.negative_prompt` | `""` | negative prompt |
 | `options.enable_prompt_expansion` | `true` | AI prompt enhancement |
 | `options.multi_shots` | — | boolean; requires `enable_prompt_expansion: true` |
 | `options.audio` | — | URL to audio file |
-| `options.image` | — | reference image URL; image-to-video only |
+| `options.image` / `options.first_frame` | — | reference image URL; image-to-video only. `options.image` is the compatibility-friendly field in this API; the provider layer maps it to `first_frame` for Wan 2.7 i2v |
 
-**AI mode only:**
+**Grok Imagine fields:**
 | Field | Default | Notes |
 |-------|---------|-------|
 | `options.mode` | `"normal"` | `"fun"` / `"normal"` / `"spicy"` |
 
+**Wan 2.7 prompt rules:**
+- Use structured multi-shot prompts with explicit time markers when needed, for example `[0-3s]`, `[3-8s]`.
+- Put each timed segment on its own line.
+- Do not plan scenes shorter than 5 seconds in the full music video agent flow unless the user explicitly needs single-asset clips outside the pipeline.
+- If audio is supplied, Wan 2.7 is the recommended model because the agent pipeline is designed around its lip-sync support.
+
 ```bash
-# Text to video
+# Text to video with Wan 2.7
 curl -X POST "${APP_URL}/api/ai/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${MUSID_API_KEY}" \
   -d '{
     "mediaType": "video",
+    "model": "wan-2.7",
     "scene": "text-to-video",
-    "prompt": "...",
+    "prompt": "Rain-soaked rooftop singer, cinematic blue backlight.\n\n[0-3s] Medium push-in as the singer turns toward camera and starts the chorus.\n\n[3-5s] Tight close-up with clear mouth movement, wind in hair, emotional delivery.",
     "options": {
       "aspect_ratio": "9:16",
       "duration": 5,
+      "resolution": "720p",
       "enable_prompt_expansion": true
     }
   }'
 
-# Image to video
+# Image to video with Grok Imagine
 curl -X POST "${APP_URL}/api/ai/generate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${MUSID_API_KEY}" \
   -d '{
     "mediaType": "video",
+    "model": "grok-imagine",
     "scene": "image-to-video",
     "prompt": "...",
     "options": {
       "image": "https://example.com/ref.jpg",
-      "duration": 5,
-      "resolution": "720p"
+      "aspect_ratio": "9:16",
+      "mode": "normal"
     }
   }'
 ```
@@ -252,7 +265,7 @@ curl -X POST "${APP_URL}/api/ai/generate" \
 | `options.vocalGender` | `""` | `"m"` or `"f"` |
 | `options.negativeTags` | `""` | style tags to avoid |
 | `options.lyrics` | `""` | custom lyrics; only when `customMode: true` and no audio uploaded |
-| `options.scene` | — | `"add-vocals"` or `"add-instrumental"`; only when audio uploaded |
+| `options.scene` | — | `"add-vocals"` or `"add-instrumental"`; only when audio uploaded. For music requests, this switch lives inside `options`, not the top-level `scene` field |
 | `options.uploadUrl` | — | uploaded audio file URL; only when audio uploaded |
 
 ```bash
@@ -298,7 +311,8 @@ The webhook will update task status automatically when complete.
 
 ## Notes
 
-- Pipeline model selection and scene planning are handled entirely server-side — not user-configurable.
+- Full pipeline defaults to `wan-2.7` unless `agentModel` is provided explicitly.
+- Pipeline scene planning is tool-driven: the agent must wait for `Audio analysis complete` before calling `planScenes`.
 - Video merge (final assembly) is done **on the web** — click Merge on the project page.
 - Pipeline projects show a CHARACTER step in the UI with the generated reference image.
-- Credit costs: Image 1K=4cr, 2K=8cr, 4K=12cr · Music=4cr · Standard video 5cr/sec · Audio transcription=1cr · Vocal remover=4cr
+- Credit costs: Image 1K=4cr, 2K=8cr, 4K=12cr · Music=4cr · Wan 2.7 video 6cr/sec (`480p`/`720p`) or 9cr/sec (`1080p`) · Grok Imagine video 1cr/sec · Audio transcription=1cr · Vocal remover=4cr
